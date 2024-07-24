@@ -5,12 +5,12 @@ use futures_util::{
 };
 use std::{
     borrow::Cow,
-    io,
     net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6, ToSocketAddrs},
     pin::Pin,
     task::{Context, Poll},
     vec,
 };
+mod io;
 
 pub use error::Error;
 
@@ -51,7 +51,8 @@ impl<'a> ToProxyAddrs for &'a [SocketAddr] {
     type Output = ProxyAddrsStream;
 
     fn to_proxy_addrs(&self) -> Self::Output {
-        ProxyAddrsStream(Some(io::Result::Ok(self.to_vec().into_iter())))
+        let addresses = self.to_vec();
+        ProxyAddrsStream(Some(std::io::Result::Ok(addresses.into_iter())))
     }
 }
 
@@ -79,7 +80,7 @@ impl<'a, T: ToProxyAddrs + ?Sized> ToProxyAddrs for &'a T {
     }
 }
 
-pub struct ProxyAddrsStream(Option<io::Result<vec::IntoIter<SocketAddr>>>);
+pub struct ProxyAddrsStream(Option<std::io::Result<vec::IntoIter<SocketAddr>>>);
 
 impl Stream for ProxyAddrsStream {
     type Item = Result<SocketAddr>;
@@ -123,7 +124,7 @@ impl<'a> TargetAddr<'a> {
 impl<'a> ToSocketAddrs for TargetAddr<'a> {
     type Iter = Either<std::option::IntoIter<SocketAddr>, std::vec::IntoIter<SocketAddr>>;
 
-    fn to_socket_addrs(&self) -> io::Result<Self::Iter> {
+    fn to_socket_addrs(&self) -> std::io::Result<Self::Iter> {
         Ok(match self {
             TargetAddr::Ip(addr) => Either::Left(addr.to_socket_addrs()?),
             TargetAddr::Domain(domain, port) => Either::Right((&**domain, *port).to_socket_addrs()?),
@@ -283,7 +284,7 @@ mod tests {
     #[test]
     fn converts_socket_addr_ref_to_proxy_addrs() -> Result<()> {
         let addr = SocketAddr::from(([1, 1, 1, 1], 443));
-        let res = to_proxy_addrs(&addr)?;
+        let res = to_proxy_addrs(addr)?;
         assert_eq!(&res[..], &[addr]);
         Ok(())
     }
@@ -317,7 +318,7 @@ mod tests {
     #[test]
     fn converts_socket_addr_ref_to_target_addr() -> Result<()> {
         let addr = SocketAddr::from(([1, 1, 1, 1], 443));
-        let res = into_target_addr(&addr)?;
+        let res = into_target_addr(addr)?;
         assert_eq!(TargetAddr::Ip(addr), res);
         Ok(())
     }
